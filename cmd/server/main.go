@@ -47,21 +47,22 @@ func handshakeWebsocket(config *websocket.Config, req *http.Request) error {
 
 func handleWebsocket(target string) func(*websocket.Conn) {
 	return func(ws *websocket.Conn) {
-		defer ws.Close()
-
 		ws.PayloadType = websocket.BinaryFrame
 
-		logger.Debugw("new connection", "target", target, "remoteAddr", ws.RemoteAddr().String())
+		client := ws.Request().RemoteAddr
+		logger.Infow("new connection", "target", target, "client", client)
 
 		conn, err := net.Dial("tcp", target)
 		if err != nil {
-			logger.Warnw("dial service fail", "err", err)
+			logger.Warnw("dial service fail", "remote", target, "err", err)
+			ws.Close()
 			return
 		}
 		defer conn.Close()
 
-		websockify.Proxy(ws, conn)
+		tcpConn, _ := conn.(*net.TCPConn)
+		websockify.Proxy(ws, tcpConn)
 
-		logger.Debugw("connection close", "address", ws.RemoteAddr().String())
+		logger.Infow("connection close", "client", client, "target", target)
 	}
 }

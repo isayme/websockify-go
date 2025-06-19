@@ -1,39 +1,39 @@
 package websockify
 
 import (
-	"io"
 	"net"
+	"sync"
 
 	logger "github.com/isayme/go-logger"
-	"github.com/pkg/errors"
+	"golang.org/x/net/websocket"
 )
 
-func Proxy(client, server net.Conn) {
-	defer client.Close()
-	defer server.Close()
+func Proxy(client *websocket.Conn, remote *net.TCPConn) {
+	// see https://stackoverflow.com/a/75418345/1918831
+	wg := sync.WaitGroup{}
+	wg.Add(2)
 
-	// any of remote/client closed, the other one should close with quiet
-	closed := false
+	clientAddr := client.Request().RemoteAddr
 
 	go func() {
-		_, err := Copy(server, client)
-		if err != nil && !closed {
-			if errors.Cause(err) != io.EOF {
-				logger.Errorf("[%s] Copy from client to server fail, err: %s", server.RemoteAddr(), err)
-			}
-		}
-		closed = true
-		server.Close()
-		logger.Debug("client read end")
+		defer wg.Done()
+
+		var err error
+		var n int64
+		n, err = Copy(remote, client)
+		logger.Debugw("copy from client end", "n", n, "err", err, "client", clientAddr)
+		remote.CloseWrite()
 	}()
 
-	_, err := Copy(client, server)
-	if err != nil && !closed {
-		if errors.Cause(err) != io.EOF {
-			logger.Errorf("[%s] Copy from server to client fail, err: %s", server.RemoteAddr(), err)
-		}
-	}
-	closed = true
-	client.Close()
-	logger.Debug("remote read end")
+	go func() {
+		defer wg.Done()
+
+		var err error
+		var n int64
+		n, err = Copy(client, remote)
+		logger.Debugw("copy from remote end", "client", clientAddr, "n", n, "err", err)
+		client.WriteClose(0)
+	}()
+
+	wg.Wait()
 }
