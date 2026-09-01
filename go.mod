@@ -6,7 +6,7 @@ require (
 	github.com/isayme/go-bufferpool v0.1.1
 	github.com/isayme/go-logger v0.3.1
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/net v0.57.0
+	golang.org/x/net v0.58.0
 )
 
 require (
